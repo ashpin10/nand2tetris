@@ -1,0 +1,94 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/05/CPU.hdl
+/**
+ * The Hack Central Processing unit (CPU).
+ * Parses the binary code in the instruction input and executes it according to the
+ * Hack machine language specification. In the case of a C-instruction, computes the
+ * function specified by the instruction. If the instruction specifies to read a memory
+ * value, the inM input is expected to contain this value. If the instruction specifies
+ * to write a value to the memory, sets the outM output to this value, sets the addressM
+ * output to the target address, and asserts the writeM output (when writeM == 0, any
+ * value may appear in outM).
+ * If the reset input is 0, computes the address of the next instruction and sets the
+ * pc output to that value. If the reset input is 1, sets pc to 0.
+ * Note: The outM and writeM outputs are combinational: they are affected by the
+ * instruction's execution during the current cycle. The addressM and pc outputs are
+ * clocked: although they are affected by the instruction's execution, they commit to
+ * their new values only in the next cycle.
+ */
+CHIP CPU {
+
+    IN  inM[16],         // M value input  (M = contents of RAM[A])
+        instruction[16], // Instruction for execution
+        reset;           // Signals whether to restart the current
+                         // program (reset==1) or continue executing
+                         // the current program (reset==0).
+
+    OUT outM[16],        // M value output
+        writeM,          // Write to M? 
+        addressM[15],    // Address in data memory (of M)
+        pc[15];          // Address of next instruction
+
+    PARTS:
+    //// Replace this comment with your code.
+
+PARTS:
+    // Put your code here:
+     Not(in=instruction[15], out=AorC);
+    ARegister(in=Mux1out, load=Or1, out[0..14]=addressM
+                                      , out=Aout);
+    And(a=instruction[15], b=instruction[5], out=And1);
+    Or(a=AorC, b=instruction[5], out=Or1);
+    Mux16(a=instruction, b=ALUout, sel=And1, out=Mux1out);
+    And(a=instruction[15], b=instruction[12], out=useM);
+    Mux16(a=Aout, b=inM, sel=useM, out=Mux2out);
+    And(a=instruction[15], b=instruction[4], out=loadD);
+    DRegister(in=ALUout, load=loadD, out=Dout);
+    PC(in=Aout, reset=reset, load=jumpout, inc=true, out[0..14]=pc);
+    ALU(x=Dout, y=Mux2out, zx=instruction[11], nx=instruction[10],zy=instruction[9],ny=instruction[8], f=instruction[7], no=instruction[6], ng=neg, zr=zero, out=outM, out=ALUout);
+    And(a=instruction[3], b=instruction[15], out=writeM);
+
+    Not(in=neg, out=postemp);
+    Not(in=zero, out=nonzero);
+    And(a=postemp, b=nonzero, out=pos);
+    Not(in=instruction[0], out=notins0);
+    Not(in=instruction[1], out=notins1);
+    Not(in=instruction[2], out=notins2);
+
+    // JGT
+    And(a=notins2, b=notins1, out=jump1and1);
+    And(a=jump1and1, b=instruction[0], out=jump1pins);
+    And(a=jump1pins, b=pos, out=jump1);
+
+    // JEQ
+    And(a=notins2, b=notins0, out=jump2and1);
+    And(a=jump2and1, b=instruction[1], out=jump2pins);
+    And(a=jump2pins, b=zero, out=jump2);
+
+    // JLT
+    And(a=notins1, b=notins0, out=jump3and1);
+    And(a=jump3and1, b=instruction[2], out=jump3pins);
+    And(a=jump3pins, b=neg, out=jump3);
+
+    And(a=instruction[0], b=instruction[1], out=jump4and);
+    And(a=jump4and, b=notins2, out=jump4pins);
+    Or(a=pos, b=zero, out=jump4cond);
+    And(a=jump4pins, b=jump4cond, out=jump4);
+
+    And(a=instruction[2], b=instruction[0], out=uneqand);
+    And(a=uneqand, b=notins1, out=uneq);
+    And(a=uneq, b=nonzero, out=jump5);
+
+    And(a=instruction[2], b=instruction[1], out=jump6and);
+    And(a=jump6and, b=notins0, out=jump6pins);
+    Or(a=neg, b=zero, out=jump6cond);
+    And(a=jump6pins, b=jump6cond, out=jump6);
+
+    And(a=instruction[2], b=instruction[1], out=both);
+    And(a=both, b=instruction[0], out=jump7);
+
+    Or8Way(in[0]=false, in[1]=jump1, in[2]=jump2, in[3]=jump3, in[4]=jump4, in[5]=jump5, in[6]=jump6, in[7]=jump7, out=jumpsignal);
+    And(a=jumpsignal, b=instruction[15], out=jumpout);
+}
